@@ -1,5 +1,5 @@
 'use strict';
-const Q = window.QUESTIONS, B = window.SUPPLEMENT_QUESTIONS, ROLES = window.CHARACTERS;
+const Q = window.QUESTIONS, B = [], ROLES = window.CHARACTERS;
 const KEY = 'anime-personality-v2', LEGACY_KEY = 'between-days-v1';
 const DIMS = [['交流发起','更多回应','更多发起'],['事前安排','临近决定','提前安排'],['尝试新方式','熟悉方式','尝试新方式'],['判断前比较','较少比较','较多比较'],['当场表达分歧','稍后表达','当场表达'],['情绪回落速度','持续较久','较快回落']];
 const E = window.createQuizEngine(Q, B, ROLES);
@@ -33,25 +33,20 @@ function render() {
 }
 function home() {
   const count = state.answers.filter(a => a !== null).length;
-  el.innerHTML = `<section class="cover"><div class="wordmark">动漫人格测试</div><h1>测测你像哪个动漫角色</h1>${art()}<button class="primary" id="start">${count ? (state.completed ? '查看结果' : '继续测试') : '开始测试'}</button><p class="hint">60 道主测题 · 约 10 分钟<br>结果接近时，补充 6—12 道</p>${count ? '<button class="text-button" id="reset">重新开始</button>' : ''}</section>${footer()}`;
+  el.innerHTML = `<section class="cover"><div class="wordmark">动漫人格测试</div><h1>测测你像哪个动漫角色</h1>${art()}<button class="primary" id="start">${count ? (state.completed ? '查看结果' : '继续测试') : '开始测试'}</button><p class="hint">36 道题 · 约 5—7 分钟</p>${count ? '<button class="text-button" id="reset">重新开始</button>' : ''}</section>${footer()}`;
   $('#start').onclick = () => {
     const migrated = state.migrated;
     state.migrated = false;
     const destination = E.route(state); save(); show(destination);
-    if (migrated) notify('已保留原来的 36 题，继续补完即可');
+    if (migrated) notify('已沿用新版保留题目的旧回答');
   };
   $('#reset')?.addEventListener('click', reset);
 }
 function reset() { state = E.emptyState(); save(); show('quiz'); }
 function quiz() {
-  const extra = state.stage === 'supplement';
-  const index = extra ? state.supplementOrder[state.supplementIndex] : state.index;
-  const q = (extra ? B : Q)[index];
-  const answer = (extra ? state.supplementAnswers : state.answers)[index];
-  const total = extra ? state.supplementOrder.length : Q.length;
-  const position = extra ? state.supplementIndex : state.index;
-  const done = extra ? state.supplementOrder.filter(i => state.supplementAnswers[i] !== null).length : state.answers.filter(a => a !== null).length;
-  el.innerHTML = `<header class="top"><button class="back" id="back" aria-label="${extra || state.index ? '上一题' : '返回首页'}">←</button><span class="counter">${extra ? '补充 ' : ''}${position+1} / ${total}</span><span class="brand">动漫人格测试</span></header><div class="progress" role="progressbar" aria-label="${extra ? '补充题进度' : '主测题进度'}" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><i style="width:${done/total*100}%"></i></div><section class="question">${art()}<p class="scene">${esc(q.scene)}，</p><h2>${esc(q.text)}</h2></section><div class="options" role="group" aria-label="最近一个月的发生频率">${['几乎没有','较少','约一半时候','较多','几乎每次'].map((text,i) => `<button class="option" data-value="${i}" aria-pressed="${answer===i}"><span class="dot"></span><span>${text}</span></button>`).join('')}</div><div class="skip"><button data-skip="none" aria-pressed="${answer==='none'||answer==='unsure'}">没经历过 / 记不清</button></div><p class="qfoot">${extra ? '这组题帮助区分接近的结果 · 仍按最近一个月的实际情况选择' : '按最近一个月的实际情况选择'}</p>`;
+  const index = state.index, q = Q[index], answer = state.answers[index];
+  const total = Q.length, position = state.index, done = state.answers.filter(a => a !== null).length;
+  el.innerHTML = `<header class="top"><button class="back" id="back" aria-label="${state.index ? '上一题' : '返回首页'}">←</button><span class="counter">${position+1} / ${total}</span><span class="brand">动漫人格测试</span></header><div class="progress" role="progressbar" aria-label="答题进度" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><i style="width:${done/total*100}%"></i></div><section class="question">${art()}<p class="scene">${esc(q.scene)}，</p><h2>${esc(q.text)}</h2></section><div class="options" role="group" aria-label="最近一个月的发生频率">${['几乎没有','较少','约一半时候','较多','几乎每次'].map((text,i) => `<button class="option" data-value="${i}" aria-pressed="${answer===i}"><span class="dot"></span><span>${text}</span></button>`).join('')}</div><div class="skip"><button data-skip="none" aria-pressed="${answer==='none'||answer==='unsure'}">没经历过 / 记不清</button></div><p class="qfoot">按最近一个月的实际情况选择</p>`;
   $('#back').onclick = () => { const destination = E.back(state); save(); show(destination); };
   el.querySelectorAll('[data-value]').forEach(button => button.onclick = () => pick(Number(button.dataset.value)));
   el.querySelectorAll('[data-skip]').forEach(button => button.onclick = () => pick('none'));
@@ -63,7 +58,7 @@ function pick(answer) {
   el.querySelectorAll('[data-skip]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.skip === answer)));
   advanceTimer = setTimeout(() => { const destination = E.next(state); save(); show(destination); }, 220);
 }
-function calculate(answers, extra = []) { return E.calculate(answers, extra); }
+function calculate(answers) { return E.calculate(answers); }
 function rank(scores) { return E.rank(scores); }
 function tendency(s){return s.value===null?'相关回答不足':s.value<40?'偏向'+DIMS[s.d][1]:s.value>60?'偏向'+DIMS[s.d][2]:'没有明显倾向';}
 function summary(scores){const strongest=scores.map((s,d)=>({...s,d})).filter(s=>s.value!==null&&Math.abs(s.value-50)>10).sort((a,b)=>Math.abs(b.value-50)-Math.abs(a.value-50)).slice(0,2);return strongest.length?strongest.map(tendency).join('，'):'你的回答中，暂时没有特别突出的单一倾向';}
@@ -75,15 +70,15 @@ function matchLine(scores,r){
 }
 
 function result() {
-  const scores = calculate(state.answers, state.supplementAnswers), ranked = rank(scores);
+  const scores = calculate(state.answers), ranked = rank(scores);
   const balanced = scores.every(s => s.value !== null && s.value >= 40 && s.value <= 60), r = ranked[0]?.r;
-  const extraCount = state.supplementOrder.filter(i => state.supplementAnswers[i] !== null).length;
-  el.innerHTML = `<section class="result-head"><p class="res-label">${r ? (balanced ? '一个可参考的角色' : '与你有些相似的角色') : '你的日常画像'}</p>${art()}<h1>${r ? esc(r.name) : '暂时还看不清'}</h1>${r ? `<p class="work">${esc(r.work)}</p><p class="description">${esc(r.desc)}</p>${matchLine(scores,r) ? `<p class="similarity">${esc(matchLine(scores,r))}</p>` : ''}` : '<p class="description">有些维度的实际经历偏少，还不能匹配角色。<br>可以返回，补充有真实经历的题目。</p>'}${balanced ? '<p class="small">你的倾向比较均衡，也可能像其他角色。</p>' : ranked.length > 1 && ranked[1].distance-ranked[0].distance < 3 ? '<p class="small">前几位的倾向接近，可以一起参考。</p>' : ''}</section><section class="chart-box"><h3>你的六个日常侧面</h3><div class="chart">${scores.map((s,d) => `<div class="bar-item"><div class="bar-track"><i style="height:${s.value ?? 0}%"></i></div><span>${['主动交流','提前安排','尝试新事','比较选项','当场表达','情绪回落'][d]}</span>${s.value === null ? '<small>不足</small>' : ''}</div>`).join('')}</div></section><p class="small answer-count">本次：60 道主测${extraCount ? `＋${extraCount} 道补充` : ''}</p>${ranked.length ? `<p class="also">也有点像 ${ranked.slice(1,3).map(x => esc(x.r.name)).join('、')}</p>` : ''}<div class="actions"><button class="primary" id="share">保存结果图片</button><button class="secondary" id="review">${r ? '再测一次' : '返回补充'}</button></div><div id="share-area"></div>${footer()}`;
+
+  el.innerHTML = `<section class="result-head"><p class="res-label">${r ? (balanced ? '一个可参考的角色' : '与你有些相似的角色') : '你的日常画像'}</p>${art()}<h1>${r ? esc(r.name) : '暂时还看不清'}</h1>${r ? `<p class="work">${esc(r.work)}</p><p class="description">${esc(r.desc)}</p>${matchLine(scores,r) ? `<p class="similarity">${esc(matchLine(scores,r))}</p>` : ''}` : '<p class="description">有些维度的实际经历偏少，还不能匹配角色。<br>可以返回，补充有真实经历的题目。</p>'}${balanced ? '<p class="small">你的倾向比较均衡，也可能像其他角色。</p>' : ranked.length > 1 && ranked[1].distance-ranked[0].distance < 3 ? '<p class="small">前几位的倾向接近，可以一起参考。</p>' : ''}</section><section class="chart-box"><h3>你的六个日常侧面</h3><div class="chart">${scores.map((s,d) => `<div class="bar-item"><div class="bar-track"><i style="height:${s.value ?? 0}%"></i></div><span>${['主动交流','提前安排','尝试新事','比较选项','当场表达','情绪回落'][d]}</span>${s.value === null ? '<small>不足</small>' : ''}</div>`).join('')}</div></section><p class="small answer-count">本次：${Q.length} 道题</p>${ranked.length ? `<p class="also">也有点像 ${ranked.slice(1,3).map(x => esc(x.r.name)).join('、')}</p>` : ''}<div class="actions"><button class="primary" id="share">保存结果图片</button><button class="secondary" id="review">${r ? '再测一次' : '返回补充'}</button></div><div id="share-area"></div>${footer()}`;
   $('#review').onclick = () => {
     if (r) reset();
     else {
       const dim = scores.findIndex(s => s.value === null);
-      state.stage = 'main'; state.completed = false;
+      state.completed = false;
       state.index = Q.findIndex((q,i) => q.dim === dim && typeof state.answers[i] !== 'number');
       save(); show('quiz');
     }
@@ -91,7 +86,7 @@ function result() {
   $('#share').onclick = () => shareCard(scores,ranked,balanced);
 }
 function about() {
-  el.innerHTML = `<div class="about"><button class="back" id="return">← 返回</button><h1>关于测试</h1><p>回想最近一个月的日常行为，选择实际发生的频率。没有经历过的情况可以跳过。</p><p>主测共 60 题。前几位角色结果接近时，先补充 6 题；仍接近时，再补至最多 12 题。补充维度按这些角色的差异选择，每个维度一正一反。它提供更多行为线索，也可能仍然无法明确区分。</p><p>每个维度至少有 6 道有效主测回答才展示。补充回答与主测一起计算，不把没经历过记成中间分。</p><p>这是趣味测试，目前包含 ${ROLES.length} 位角色的编辑试配，不是经过验证的心理量表。结果仅供娱乐参考；增加题数不等于已证明更准确。</p><p>答案仅保存在当前浏览器里。旧版 36 题的进度可以接着使用；修改主测答案后会重新选择补充题。分享图片不包含完整答题记录。</p><p>视觉参考 <a href="https://exoticflicker.github.io/cati/" target="_blank" rel="noopener noreferrer">cati</a>。</p></div>`;
+  el.innerHTML = `<div class="about"><button class="back" id="return">← 返回</button><h1>关于测试</h1><p>回想最近一个月的日常行为，选择实际发生的频率。没有经历过的情况可以跳过。</p><p>全程固定 36 题，做完即可查看结果，不追加补充题。题目覆盖六个日常侧面；结果接近时，可以把几位角色一起参考。</p><p>每个维度有 6 道题，至少 4 道有效回答才展示。不把没经历过记成中间分。</p><p>这是趣味测试，目前包含 ${ROLES.length} 位角色的编辑试配，不是经过验证的心理量表。结果仅供娱乐参考；增加题数不等于已证明更准确。</p><p>答案仅保存在当前浏览器里。旧版答过、且保留在新版中的题目会沿用回答，其余题目需要补答。分享图片不包含完整答题记录。</p><p>视觉参考 <a href="https://exoticflicker.github.io/cati/" target="_blank" rel="noopener noreferrer">cati</a>。</p></div>`;
   $('#return').onclick = () => show(previous);
 }
 function publicURL(){const u=new URL(location.href);return ['http:','https:'].includes(u.protocol)&&!['localhost','127.0.0.1','::1','[::1]'].includes(u.hostname)&&!/^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(u.hostname)?u.origin+u.pathname:null;}
