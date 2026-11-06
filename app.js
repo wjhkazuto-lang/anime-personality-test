@@ -91,21 +91,17 @@ function roleExplanation(r,scores) {
 }
 function result() {
   const scores=calculate(state.answers), assessment=E.assess(scores), kind=assessment.kind;
-  const r=kind==='clear'?assessment.candidates[0].r:null;
-  const titles={balanced:'暂时没有明显偏向',limited:'先看看你的日常画像',insufficient:'暂时还看不清',group:'几位角色都可参考'};
+  const r=assessment.primary?.r||null;
   let content='';
-  if(r) content=`<p class="work">${esc(r.work)}</p><p class="description">${esc(r.desc)}</p>${matchLine(scores,r)?`<p class="similarity">${esc(matchLine(scores,r))}</p>`:''}<details class="role-explanation"><summary>看看角色解读</summary><p class="small">参考阶段：${esc(r.period)}</p><p class="small">也要一起看：${esc(r.counterexample)}</p></details>`;
-  else if(kind==='group') content=`<p class="description">现有线索还不足以只选一位。下面几位可一起参考，排列不代表谁更像。点开名字，可以看看各自的阶段和解读。</p><div class="candidate-grid">${assessment.candidates.map(x=>`<button class="candidate-button" data-candidate="${esc(x.r.id)}" aria-expanded="false">${portraitMarkup(x.r)}<span>${esc(x.r.name)}</span></button>`).join('')}</div><div id="candidate-detail" class="candidate-detail" hidden></div>`;
-  else if(kind==='balanced') content='<p class="description">你的六个侧面大多处在中间，目前没有足够突出的线索来指定某一个角色。先把下面的日常画像作为参考。</p>';
-  else if(kind==='limited') content='<p class="description">这次的回答与现有角色差异较大，先保留你的日常画像，不勉强指定角色。</p>';
+  if(r) content=`<p class="work">${esc(r.work)}</p><p class="description">${esc(r.desc)}</p>${matchLine(scores,r)?`<p class="similarity">${esc(matchLine(scores,r))}</p>`:''}${assessment.note?`<p class="small match-note">${esc(assessment.note)}</p>`:''}<details class="role-explanation"><summary>看看角色解读</summary><p class="small">参考阶段：${esc(r.period)}</p><p class="small">也要一起看：${esc(r.counterexample)}</p></details>${assessment.alternatives.length?`<details class="other-matches"><summary>也有些相似</summary><div class="alternative-names">${assessment.alternatives.map(x=>`<button data-candidate="${esc(x.r.id)}" aria-expanded="false">${esc(x.r.name)}</button>`).join('')}</div><div id="candidate-detail" class="candidate-detail" hidden></div></details>`:''}`;
   else content='<p class="description">有些维度的实际经历偏少，还不能匹配角色。可以返回，补充有真实经历的题目。</p>';
-  el.innerHTML=`<section class="result-head"><p class="res-label">${r?'与你有些相似的角色':kind==='group'?'几个可参考的方向':'你的日常画像'}</p>${r?portraitMarkup(r):kind==='group'?'':art()}<h1>${esc(r?r.name:titles[kind])}</h1>${content}</section><section class="chart-box"><h3>你的六个日常侧面</h3><div class="chart">${scores.map((s,d)=>`<div class="bar-item"><div class="bar-track"><i style="height:${s.value??0}%"></i></div><span>${['主动交流','提前安排','尝试新事','比较选项','当场表达','情绪回落'][d]}</span>${s.value===null?'<small>不足</small>':''}</div>`).join('')}</div></section><p class="small answer-count">本次：${Q.length} 道题</p><div class="actions"><button class="primary" id="share">保存结果图片</button><button class="secondary" id="review">${kind==='insufficient'?'返回补充':'再测一次'}</button></div><div id="share-area"></div>${footer()}`;
+  el.innerHTML=`<section class="result-head"><p class="res-label">${r?'这次最接近你的角色':'你的日常画像'}</p>${r?portraitMarkup(r):art()}<h1>${esc(r?r.name:'暂时还看不清')}</h1>${content}</section><section class="chart-box"><h3>你的六个日常侧面</h3><div class="chart">${scores.map((s,d)=>`<div class="bar-item"><div class="bar-track"><i style="height:${s.value??0}%"></i></div><span>${['主动交流','提前安排','尝试新事','比较选项','当场表达','情绪回落'][d]}</span>${s.value===null?'<small>不足</small>':''}</div>`).join('')}</div></section><p class="small answer-count">本次：${Q.length} 道题</p><div class="actions"><button class="primary" id="share">保存结果图片</button><button class="secondary" id="review">${kind==='insufficient'?'返回补充':'再测一次'}</button></div><div id="share-area"></div>${footer()}`;
   el.querySelectorAll('.portrait-image').forEach(portrait=>{portrait.onerror=()=>{const frame=portrait.parentElement;const blank=document.createElement('div');blank.className='art';blank.setAttribute('aria-hidden','true');frame.replaceWith(blank);};});
   el.querySelectorAll('[data-candidate]').forEach(button=>button.onclick=()=>{
     const panel=$('#candidate-detail'),expanded=button.getAttribute('aria-expanded')==='true';
     el.querySelectorAll('[data-candidate]').forEach(b=>b.setAttribute('aria-expanded','false'));
     panel.hidden=expanded;
-    if(!expanded){button.setAttribute('aria-expanded','true');const selected=assessment.candidates.find(x=>x.r.id===button.dataset.candidate).r;panel.innerHTML=`<h2>${esc(selected.name)}</h2>`+roleExplanation(selected,scores);}
+    if(!expanded){button.setAttribute('aria-expanded','true');const selected=assessment.alternatives.find(x=>x.r.id===button.dataset.candidate).r;panel.innerHTML=`<h2>${esc(selected.name)}</h2>`+roleExplanation(selected,scores);}
   });
   $('#review').onclick=()=>{
     if(kind!=='insufficient')reset();
@@ -114,28 +110,23 @@ function result() {
   $('#share').onclick=async()=>{const button=$('#share');if(button.disabled)return;button.disabled=true;try{await shareCard(scores,assessment);}finally{button.disabled=false;}};
 }
 function about() {
-  el.innerHTML = `<div class="about"><button class="back" id="return">← 返回</button><h1>关于测试</h1><p>回想最近一个月的日常行为，选择实际发生的频率。没有经历过的情况可以跳过。</p><p>全程固定 36 题，做完即可查看结果，不追加补充题。题目覆盖六个日常侧面；结果接近时，可以把几位角色一起参考。</p><p>每个维度有 6 道题，至少 4 道有效回答才展示。不把没经历过记成中间分。</p><p>这是趣味测试，目前包含 ${ROLES.length} 位角色的编辑试配，不是经过验证的心理量表。结果仅供娱乐参考；增加题数不等于已证明更准确。</p><p>答案仅保存在当前浏览器里。旧版答过、且保留在新版中的题目会沿用回答，其余题目需要补答。分享图片不包含完整答题记录。</p><p>视觉参考 <a href="https://exoticflicker.github.io/cati/" target="_blank" rel="noopener noreferrer">cati</a>。</p><details class="image-credits"><summary>角色图片与匹配说明</summary><p>角色图片随网站提供，版权归各作品权利方。多数身份与图片索引来自 <a href="https://anilist.co/" target="_blank" rel="noopener noreferrer">AniList</a>；惠惠、利威尔、红莉栖保留原官方样例，白发金木采用√A官方角色图。配图不改变人格解读的参考阶段。</p><p>当前按热度与明确点名保留80位角色，热度仅用于选角。六个日常侧面不能完整区分这些人物。倾向较均衡时只展示画像；接近或部分角色资料不足时共同参考，不指定唯一角色。没有随机抽取角色，也不按人气分配结果。</p></details></div>`;
+  el.innerHTML = `<div class="about"><button class="back" id="return">← 返回</button><h1>关于测试</h1><p>回想最近一个月的日常行为，选择实际发生的频率。没有经历过的情况可以跳过。</p><p>全程固定 36 题，做完即可查看结果，不追加补充题。题目覆盖六个日常侧面；有效回答足够后，选出一位本次最接近的角色。</p><p>每个维度有 6 道题，至少 4 道有效回答才展示。不把没经历过记成中间分。</p><p>这是趣味测试，目前包含 ${ROLES.length} 位角色的编辑试配，不是经过验证的心理量表。结果仅供娱乐参考；增加题数不等于已证明更准确。</p><p>答案仅保存在当前浏览器里。旧版答过、且保留在新版中的题目会沿用回答，其余题目需要补答。分享图片不包含完整答题记录。</p><p>视觉参考 <a href="https://exoticflicker.github.io/cati/" target="_blank" rel="noopener noreferrer">cati</a>。</p><details class="image-credits"><summary>角色图片与匹配说明</summary><p>角色图片随网站提供，版权归各作品权利方。多数身份与图片索引来自 <a href="https://anilist.co/" target="_blank" rel="noopener noreferrer">AniList</a>；惠惠、利威尔、红莉栖保留原官方样例，白发金木采用√A官方角色图。配图不改变人格解读的参考阶段。</p><p>当前按热度与明确点名保留80位角色，热度仅用于选角。六个日常侧面不能完整区分这些人物。按六维距离给出一位首选，相近角色折叠展示；倾向均衡、相似有限或资料不足时会简短说明。首选是本次编辑试配中的最接近者，不代表唯一的人格归属。没有随机抽取角色，也不按人气分配结果。</p></details></div>`;
   $('#return').onclick = () => show(previous);
 }
 function publicURL(){const u=new URL(location.href);return ['http:','https:'].includes(u.protocol)&&!['localhost','127.0.0.1','::1','[::1]'].includes(u.hostname)&&!/^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(u.hostname)?u.origin+u.pathname:null;}
 async function shareLink(){const url=publicURL();if(!url){notify('当前是本地预览，部署后才会有可分享的公网链接');return;}try{if(navigator.share){await navigator.share({title:'动漫人格测试',text:'你平时的样子，像故事里的谁？',url});}else{await navigator.clipboard.writeText(url);notify('测试链接已复制');}}catch(e){if(e.name!=='AbortError'){const area=$('#share-area');area.replaceChildren();const p=document.createElement('p');p.textContent='可长按或选中复制：'+url;area.append(p);}}}
 async function shareCard(scores,assessment) {
-  const group=assessment.kind==='group',clear=assessment.kind==='clear';
+  const clear=assessment.kind==='match';
   const candidates=assessment.candidates;
   const portraits=await Promise.all(candidates.map(x=>loadPortrait(x.r)));
-  const c=document.createElement('canvas');c.width=900;c.height=group?1440:1200;
+  const c=document.createElement('canvas');c.width=900;c.height=1200;
   const ctx=c.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,c.width,c.height);ctx.strokeStyle='#000000';ctx.strokeRect(35,35,830,c.height-70);ctx.fillStyle='#000000';ctx.font='22px sans-serif';ctx.fillText('动漫人格测试',70,100);
   ctx.font='bold 48px sans-serif';ctx.fillText('你平时的样子，',70,205);ctx.fillText('也有故事的回声。',70,270);
   function drawPortrait(p,x,y,size){if(!p)return;const[sx,sy,w,h]=p.p.crop;ctx.save();ctx.filter='grayscale(1)';ctx.drawImage(p.img,sx,sy,w,h,x,y,size,size);ctx.restore();ctx.strokeStyle='#000000';ctx.strokeRect(x,y,size,size);}
   ctx.font='bold 32px sans-serif';
-  if(clear){drawPortrait(portraits[0],650,140,180);ctx.fillText('我的相似角色：'+candidates[0].r.name,70,355,760);ctx.font='20px sans-serif';ctx.fillText(candidates[0].r.work,70,395,760);}
-  else if(group){
-    ctx.fillText('这次可参考的角色',70,340);
-    const columnWidth=760/candidates.length;
-    candidates.forEach((x,i)=>{const left=70+i*columnWidth;drawPortrait(portraits[i],left,375,130);ctx.font='20px sans-serif';ctx.fillText(x.r.name,left,540,columnWidth-25);});
-    ctx.font='19px sans-serif';ctx.fillText('多位可参考，排列不代表谁更像。',70,580);
-  }else{ctx.fillText('我的六维日常画像',70,355);ctx.font='18px sans-serif';ctx.fillText(assessment.kind==='balanced'?'本次倾向较均衡，暂不指定某个角色。':assessment.kind==='limited'?'与现有角色差异较大，先参考日常画像。':'相关经历不足，暂不指定角色。',70,395,760);}
-  const chartTop=group?640:440;
+  if(clear){drawPortrait(portraits[0],650,140,180);ctx.fillText('这次最接近的角色：'+candidates[0].r.name,70,355,760);ctx.font='20px sans-serif';ctx.fillText(candidates[0].r.work,70,395,760);if(assessment.note){ctx.font='18px sans-serif';ctx.fillText(assessment.note,70,430,760);}}
+  else{ctx.fillText('我的六维日常画像',70,355);ctx.font='18px sans-serif';ctx.fillText('相关经历不足，暂时还不能匹配角色。',70,395,760);}
+  const chartTop=clear?490:440;
   scores.forEach((s,d)=>{const y=chartTop+d*80;ctx.font='22px sans-serif';ctx.fillStyle='#000000';ctx.fillText(DIMS[d][0],70,y);ctx.font='19px sans-serif';ctx.fillText(tendency({...s,d}),480,y);ctx.strokeStyle='#000000';ctx.beginPath();ctx.moveTo(70,y+20);ctx.lineTo(830,y+20);ctx.stroke();if(s.value!==null){ctx.beginPath();ctx.arc(70+s.value*7.6,y+20,7,0,Math.PI*2);ctx.fill();}});
   const foot=c.height-170;ctx.font='18px sans-serif';ctx.fillText('基于近期行为的趣味联想 · 编辑试配版',70,foot);ctx.fillText('每一种日常，都有自己的形状。',70,foot+40);
   if(portraits.some(Boolean)){ctx.font='13px sans-serif';ctx.fillText('角色插画版权归原权利方',70,foot+70);}

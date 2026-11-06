@@ -29,14 +29,18 @@ window.createQuizEngine = function (questions, supplements, roles) {
   }
   function assess(scores) {
     const ranked=rank(scores);
-    if (!ranked.length) return {kind:'insufficient',candidates:[],ranked};
-    if (scores.every(s=>s.value>=evidence.balancedLow && s.value<=evidence.balancedHigh)) return {kind:'balanced',candidates:[],ranked};
+    if (!ranked.length) return {kind:'insufficient',primary:null,candidates:[],alternatives:[],note:'',ranked};
     const first=ranked[0];
-    if(first.distance>evidence.maxMeanDistance) return {kind:'limited',candidates:[],ranked};
-    // A midpoint used for an unknown character trait cannot establish a unique match.
     const competingMinimum=Math.min(...ranked.slice(1).map(x=>x.minDistance));
-    if(first.maxDistance+evidence.closeGap<competingMinimum) return {kind:'clear',candidates:[first],ranked};
-    return {kind:'group',candidates:ranked.filter(x=>x.minDistance<=first.maxDistance+evidence.closeGap).slice(0,3),ranked};
+    const balanced=scores.every(s=>s.value>=evidence.balancedLow && s.value<=evidence.balancedHigh);
+    const distant=first.distance>evidence.maxMeanDistance;
+    const tied=ranked.length>1 && Math.abs(ranked[1].distance-first.distance)<1e-9;
+    const uncertain=first.uncertainDimensions.length>0;
+    const close=first.maxDistance+evidence.closeGap>=competingMinimum;
+    // Select the closest editorial profile; uncertainty changes the explanation, not whether a result exists.
+    const note=balanced?'这次回答的倾向较均衡，角色之间的区别较小。':distant?'这是现有角色中相对最接近的一位，整体相似程度仍有限。':tied?'另有同样接近的角色，可以展开一起看。':uncertain?'部分角色特征的依据有限，把它作为这次的首选参考。':close?'细微差别不必看得太重，结果供趣味参考。':'';
+    const alternatives=ranked.slice(1).filter(x=>x.distance<=first.distance+evidence.closeGap).slice(0,2);
+    return {kind:'match',primary:first,candidates:[first],alternatives,note,flags:{balanced,distant,tied,uncertain,close},ranked};
   }
   function restore(raw, legacy) {
     const s = emptyState();
