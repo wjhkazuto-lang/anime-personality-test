@@ -3,6 +3,7 @@ window.createQuizEngine = function (questions, supplements, roles) {
   const validAnswer = a => a === null || a === 'none' || a === 'unsure' || (Number.isInteger(a) && a >= 0 && a <= 4);
   const validArray = (a, n) => Array.isArray(a) && a.length === n && a.every(validAnswer);
   const ids = questions.map(q => q.id);
+  const evidence = window.MATCH_EVIDENCE || {unknownDimensions: {}, closeGap: 3, maxMeanDistance: 20, balancedLow: 40, balancedHigh: 60};
   const required = Array.from({length: 6}, (_, d) => Math.ceil(questions.filter(q => q.dim === d).length * .6));
   function emptyState() {
     return {version: 3, questionIds: ids.slice(), answers: Array(questions.length).fill(null), index: 0, completed: false, migrated: false};
@@ -16,8 +17,26 @@ window.createQuizEngine = function (questions, supplements, roles) {
   }
   function rank(scores) {
     if (scores.some(s => s.value === null)) return [];
-    return roles.map((r,i) => ({r,i,distance:r.v.reduce((sum,v,d) => sum+Math.abs(v-scores[d].value),0)/6}))
+    return roles.map((r,i) => {
+      const unknown = evidence.unknownDimensions[r.id] || [];
+      const difference = r.v.map((v,d) => Math.abs(v-scores[d].value));
+      return {r,i,distance:difference.reduce((a,b)=>a+b,0)/6,
+        minDistance:difference.reduce((sum,v,d)=>sum+(unknown.includes(d)?0:v),0)/6,
+        maxDistance:difference.reduce((sum,v,d)=>sum+(unknown.includes(d)?Math.max(scores[d].value,100-scores[d].value):v),0)/6,
+        uncertainDimensions:unknown.slice()};
+    })
       .sort((a,b) => a.distance-b.distance || a.i-b.i);
+  }
+  function assess(scores) {
+    const ranked=rank(scores);
+    if (!ranked.length) return {kind:'insufficient',candidates:[],ranked};
+    if (scores.every(s=>s.value>=evidence.balancedLow && s.value<=evidence.balancedHigh)) return {kind:'balanced',candidates:[],ranked};
+    const first=ranked[0];
+    if(first.distance>evidence.maxMeanDistance) return {kind:'limited',candidates:[],ranked};
+    // A midpoint used for an unknown character trait cannot establish a unique match.
+    const competingMinimum=Math.min(...ranked.slice(1).map(x=>x.minDistance));
+    if(first.maxDistance+evidence.closeGap<competingMinimum) return {kind:'clear',candidates:[first],ranked};
+    return {kind:'group',candidates:ranked.filter(x=>x.minDistance<=first.maxDistance+evidence.closeGap).slice(0,3),ranked};
   }
   function restore(raw, legacy) {
     const s = emptyState();
@@ -45,5 +64,5 @@ window.createQuizEngine = function (questions, supplements, roles) {
   }
   function next(s) {if(s.index<questions.length-1){s.index++;return 'quiz';}return route(s);}
   function back(s) {s.completed=false;if(s.index>0){s.index--;return 'quiz';}return 'home';}
-  return {emptyState,calculate,rank,restore,record,route,next,back,required};
+  return {emptyState,calculate,rank,assess,restore,record,route,next,back,required};
 };

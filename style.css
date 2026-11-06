@@ -8,3 +8,6 @@
 .answer-count{text-align:center;margin:0 0 12px}.qfoot{overflow-wrap:anywhere}
 
 .portrait-frame{position:relative;width:140px;height:140px;overflow:hidden;border:1px solid #000;background:#fff;margin:24px auto;flex-shrink:0}.portrait-image{position:absolute;max-width:none;height:auto;display:block;filter:grayscale(1)}.image-credits{font-size:12px;margin-top:24px}.image-credits summary{cursor:pointer}.image-credits p{font-size:12px}
+
+.candidate-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:24px 0}.candidate-button{min-width:0;border:1px solid #000;background:#fff;color:#000;padding:10px 4px;font-size:13px;line-height:1.5}.candidate-button span{display:block;overflow-wrap:anywhere}.candidate-button .portrait-frame{width:76px;height:76px;margin:0 auto 10px}.candidate-button .art{width:76px;height:76px;margin:0 auto 10px}.candidate-button[aria-expanded=true]{outline:2px solid #000;outline-offset:2px}.candidate-detail{text-align:left;border-top:1px solid #000;padding:20px 0}.candidate-detail h2{font-size:22px}.candidate-detail .description{margin:12px 0;max-width:none}.role-explanation{font-size:12px;margin:14px 0}.role-explanation summary{cursor:pointer}.candidate-detail[hidden]{display:none}
+.candidate-grid:has(.candidate-button:nth-child(2):last-child){grid-template-columns:repeat(2,minmax(0,1fr))}
