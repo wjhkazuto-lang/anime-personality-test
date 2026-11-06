@@ -6,3 +6,5 @@
 .similarity{font-size:12px;line-height:1.8;margin:10px 0 18px;color:#000000}.description{max-width:420px;margin-left:auto;margin-right:auto}
 
 .answer-count{text-align:center;margin:0 0 12px}.qfoot{overflow-wrap:anywhere}
+
+.portrait-frame{position:relative;width:140px;height:140px;overflow:hidden;border:1px solid #000;background:#fff;margin:24px auto;flex-shrink:0}.portrait-image{position:absolute;max-width:none;height:auto;display:block;filter:grayscale(1)}.image-credits{font-size:12px;margin-top:24px}.image-credits summary{cursor:pointer}.image-credits p{font-size:12px}
