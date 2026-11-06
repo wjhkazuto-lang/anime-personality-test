@@ -1,0 +1,102 @@
+'use strict';
+const Q = window.QUESTIONS, B = window.SUPPLEMENT_QUESTIONS, ROLES = window.CHARACTERS;
+const KEY = 'anime-personality-v2', LEGACY_KEY = 'between-days-v1';
+const DIMS = [['交流发起','更多回应','更多发起'],['事前安排','临近决定','提前安排'],['尝试新方式','熟悉方式','尝试新方式'],['判断前比较','较少比较','较多比较'],['当场表达分歧','稍后表达','当场表达'],['情绪回落速度','持续较久','较快回落']];
+const E = window.createQuizEngine(Q, B, ROLES);
+const $ = s => document.querySelector(s), el = $('#app');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let storageOK = true, view = 'home', previous = 'home', advanceTimer = null, advancing = false;
+function parseJSON(s) { try { return JSON.parse(s); } catch { return null; } }
+let state = E.emptyState();
+try { state = E.restore(parseJSON(localStorage.getItem(KEY)), parseJSON(localStorage.getItem(LEGACY_KEY))); }
+catch { storageOK = false; }
+function notify(text) {
+  $('#notice').textContent = text;
+  clearTimeout(notify.timer); notify.timer = setTimeout(() => $('#notice').textContent = '', 3200);
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch { if (storageOK) notify('浏览器无法保存进度，当前仍可继续答题'); storageOK = false; }
+}
+function art() { return '<div class="art" aria-hidden="true"></div>'; }
+function footer() { return '<footer class="footer"><button class="text-button" id="about">关于测试</button><span>仅供娱乐</span></footer>'; }
+function show(nextView) {
+  clearTimeout(advanceTimer); advancing = false; view = nextView;
+  render(); window.scrollTo({top:0, behavior:'instant'});
+  const title = el.querySelector('h1,h2');
+  if (title) { title.tabIndex = -1; title.focus({preventScroll:true}); }
+}
+function render() {
+  el.className = 'fade';
+  if (view === 'home') home(); else if (view === 'quiz') quiz(); else if (view === 'result') result(); else about();
+  $('#about')?.addEventListener('click', () => { previous = view; show('about'); });
+}
+function home() {
+  const count = state.answers.filter(a => a !== null).length;
+  el.innerHTML = `<section class="cover"><div class="wordmark">动漫人格测试</div><h1>测测你像哪个动漫角色</h1>${art()}<button class="primary" id="start">${count ? (state.completed ? '查看结果' : '继续测试') : '开始测试'}</button><p class="hint">60 道主测题 · 约 10 分钟<br>结果接近时，补充 6—12 道</p>${count ? '<button class="text-button" id="reset">重新开始</button>' : ''}</section>${footer()}`;
+  $('#start').onclick = () => {
+    const migrated = state.migrated;
+    state.migrated = false;
+    const destination = E.route(state); save(); show(destination);
+    if (migrated) notify('已保留原来的 36 题，继续补完即可');
+  };
+  $('#reset')?.addEventListener('click', reset);
+}
+function reset() { state = E.emptyState(); save(); show('quiz'); }
+function quiz() {
+  const extra = state.stage === 'supplement';
+  const index = extra ? state.supplementOrder[state.supplementIndex] : state.index;
+  const q = (extra ? B : Q)[index];
+  const answer = (extra ? state.supplementAnswers : state.answers)[index];
+  const total = extra ? state.supplementOrder.length : Q.length;
+  const position = extra ? state.supplementIndex : state.index;
+  const done = extra ? state.supplementOrder.filter(i => state.supplementAnswers[i] !== null).length : state.answers.filter(a => a !== null).length;
+  el.innerHTML = `<header class="top"><button class="back" id="back" aria-label="${extra || state.index ? '上一题' : '返回首页'}">←</button><span class="counter">${extra ? '补充 ' : ''}${position+1} / ${total}</span><span class="brand">动漫人格测试</span></header><div class="progress" role="progressbar" aria-label="${extra ? '补充题进度' : '主测题进度'}" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><i style="width:${done/total*100}%"></i></div><section class="question">${art()}<p class="scene">${esc(q.scene)}，</p><h2>${esc(q.text)}</h2></section><div class="options" role="group" aria-label="最近一个月的发生频率">${['几乎没有','较少','约一半时候','较多','几乎每次'].map((text,i) => `<button class="option" data-value="${i}" aria-pressed="${answer===i}"><span class="dot"></span><span>${text}</span></button>`).join('')}</div><div class="skip"><button data-skip="none" aria-pressed="${answer==='none'||answer==='unsure'}">没经历过 / 记不清</button></div><p class="qfoot">${extra ? '这组题帮助区分接近的结果 · 仍按最近一个月的实际情况选择' : '按最近一个月的实际情况选择'}</p>`;
+  $('#back').onclick = () => { const destination = E.back(state); save(); show(destination); };
+  el.querySelectorAll('[data-value]').forEach(button => button.onclick = () => pick(Number(button.dataset.value)));
+  el.querySelectorAll('[data-skip]').forEach(button => button.onclick = () => pick('none'));
+}
+function pick(answer) {
+  if (advancing) return;
+  advancing = true; E.record(state, answer); save();
+  el.querySelectorAll('[data-value]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.value) === answer)));
+  el.querySelectorAll('[data-skip]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.skip === answer)));
+  advanceTimer = setTimeout(() => { const destination = E.next(state); save(); show(destination); }, 220);
+}
+function calculate(answers, extra = []) { return E.calculate(answers, extra); }
+function rank(scores) { return E.rank(scores); }
+function tendency(s){return s.value===null?'相关回答不足':s.value<40?'偏向'+DIMS[s.d][1]:s.value>60?'偏向'+DIMS[s.d][2]:'没有明显倾向';}
+function summary(scores){const strongest=scores.map((s,d)=>({...s,d})).filter(s=>s.value!==null&&Math.abs(s.value-50)>10).sort((a,b)=>Math.abs(b.value-50)-Math.abs(a.value-50)).slice(0,2);return strongest.length?strongest.map(tendency).join('，'):'你的回答中，暂时没有特别突出的单一倾向';}
+
+function matchLine(scores,r){
+ const words=[['先观察再加入','主动开启交流'],['边做边安排','提前安排步骤'],['偏爱熟悉方式','愿意尝试新事'],['较少反复比较','决定前比较选项'],['整理后再表达','当场说出意见'],['情绪停留较久','情绪较快回落']];
+ const parts=scores.map((s,d)=>({value:s.value,d,gap:Math.abs(s.value-r.v[d])})).filter(s=>s.value!==null&&(s.value<40||s.value>60)&&s.gap<=20).sort((a,b)=>(Math.abs(b.value-50)-b.gap)-(Math.abs(a.value-50)-a.gap)||a.d-b.d).slice(0,2);
+ return parts.length?'相似点：'+parts.map(s=>words[s.d][s.value>60?1:0]).join(' · '):'';
+}
+
+function result() {
+  const scores = calculate(state.answers, state.supplementAnswers), ranked = rank(scores);
+  const balanced = scores.every(s => s.value !== null && s.value >= 40 && s.value <= 60), r = ranked[0]?.r;
+  const extraCount = state.supplementOrder.filter(i => state.supplementAnswers[i] !== null).length;
+  el.innerHTML = `<section class="result-head"><p class="res-label">${r ? (balanced ? '一个可参考的角色' : '与你有些相似的角色') : '你的日常画像'}</p>${art()}<h1>${r ? esc(r.name) : '暂时还看不清'}</h1>${r ? `<p class="work">${esc(r.work)}</p><p class="description">${esc(r.desc)}</p>${matchLine(scores,r) ? `<p class="similarity">${esc(matchLine(scores,r))}</p>` : ''}` : '<p class="description">有些维度的实际经历偏少，还不能匹配角色。<br>可以返回，补充有真实经历的题目。</p>'}${balanced ? '<p class="small">你的倾向比较均衡，也可能像其他角色。</p>' : ranked.length > 1 && ranked[1].distance-ranked[0].distance < 3 ? '<p class="small">前几位的倾向接近，可以一起参考。</p>' : ''}</section><section class="chart-box"><h3>你的六个日常侧面</h3><div class="chart">${scores.map((s,d) => `<div class="bar-item"><div class="bar-track"><i style="height:${s.value ?? 0}%"></i></div><span>${['主动交流','提前安排','尝试新事','比较选项','当场表达','情绪回落'][d]}</span>${s.value === null ? '<small>不足</small>' : ''}</div>`).join('')}</div></section><p class="small answer-count">本次：60 道主测${extraCount ? `＋${extraCount} 道补充` : ''}</p>${ranked.length ? `<p class="also">也有点像 ${ranked.slice(1,3).map(x => esc(x.r.name)).join('、')}</p>` : ''}<div class="actions"><button class="primary" id="share">保存结果图片</button><button class="secondary" id="review">${r ? '再测一次' : '返回补充'}</button></div><div id="share-area"></div>${footer()}`;
+  $('#review').onclick = () => {
+    if (r) reset();
+    else {
+      const dim = scores.findIndex(s => s.value === null);
+      state.stage = 'main'; state.completed = false;
+      state.index = Q.findIndex((q,i) => q.dim === dim && typeof state.answers[i] !== 'number');
+      save(); show('quiz');
+    }
+  };
+  $('#share').onclick = () => shareCard(scores,ranked,balanced);
+}
+function about() {
+  el.innerHTML = `<div class="about"><button class="back" id="return">← 返回</button><h1>关于测试</h1><p>回想最近一个月的日常行为，选择实际发生的频率。没有经历过的情况可以跳过。</p><p>主测共 60 题。前几位角色结果接近时，先补充 6 题；仍接近时，再补至最多 12 题。补充维度按这些角色的差异选择，每个维度一正一反。它提供更多行为线索，也可能仍然无法明确区分。</p><p>每个维度至少有 6 道有效主测回答才展示。补充回答与主测一起计算，不把没经历过记成中间分。</p><p>这是趣味测试，目前包含 ${ROLES.length} 位角色的编辑试配，不是经过验证的心理量表。结果仅供娱乐参考；增加题数不等于已证明更准确。</p><p>答案仅保存在当前浏览器里。旧版 36 题的进度可以接着使用；修改主测答案后会重新选择补充题。分享图片不包含完整答题记录。</p><p>视觉参考 <a href="https://exoticflicker.github.io/cati/" target="_blank" rel="noopener noreferrer">cati</a>。</p></div>`;
+  $('#return').onclick = () => show(previous);
+}
+function publicURL(){const u=new URL(location.href);return ['http:','https:'].includes(u.protocol)&&!['localhost','127.0.0.1','::1','[::1]'].includes(u.hostname)&&!/^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(u.hostname)?u.origin+u.pathname:null;}
+async function shareLink(){const url=publicURL();if(!url){notify('当前是本地预览，部署后才会有可分享的公网链接');return;}try{if(navigator.share){await navigator.share({title:'动漫人格测试',text:'你平时的样子，像故事里的谁？',url});}else{await navigator.clipboard.writeText(url);notify('测试链接已复制');}}catch(e){if(e.name!=='AbortError'){const area=$('#share-area');area.replaceChildren();const p=document.createElement('p');p.textContent='可长按或选中复制：'+url;area.append(p);}}}
+function shareCard(scores,ranked,balanced){const c=document.createElement('canvas');c.width=900;c.height=1200;const ctx=c.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,900,1200);ctx.strokeStyle='#000000';ctx.strokeRect(35,35,830,1130);ctx.fillStyle='#000000';ctx.font='22px sans-serif';ctx.fillText('动漫人格测试',70,100);ctx.fillStyle='#000000';ctx.font='bold 48px sans-serif';ctx.fillText('你平时的样子，',70,205);ctx.fillText('也有故事的回声。',70,270);ctx.font='bold 34px sans-serif';ctx.fillText(ranked.length&&!balanced?'我的相似角色：'+ranked[0].r.name:'我的六维日常画像',70,355);if(ranked.length&&!balanced){ctx.font='20px sans-serif';ctx.fillText(ranked[0].r.work,70,395);}scores.forEach((s,d)=>{const y=440+d*80;ctx.font='22px sans-serif';ctx.fillStyle='#000000';ctx.fillText(DIMS[d][0],70,y);ctx.font='19px sans-serif';ctx.fillStyle='#000000';ctx.fillText(tendency({...s,d}),480,y);ctx.strokeStyle='#000000';ctx.beginPath();ctx.moveTo(70,y+20);ctx.lineTo(830,y+20);ctx.stroke();if(s.value!==null){ctx.fillStyle='#000000';ctx.beginPath();ctx.arc(70+s.value*7.6,y+20,7,0,Math.PI*2);ctx.fill();}});ctx.font='18px sans-serif';ctx.fillStyle='#000000';ctx.fillText('基于近期行为的趣味联想 · 编辑试配版',70,1030);ctx.fillText('每一种日常，都有自己的形状。',70,1070);const url=publicURL();if(url){ctx.font='14px sans-serif';ctx.fillText(url,70,1120,750);}const area=$('#share-area');area.replaceChildren();const img=new Image();img.alt='动漫人格测试结果分享卡片';img.className='image-preview';img.src=c.toDataURL('image/png');area.append(img);const a=document.createElement('a');a.href=img.src;a.download='动漫人格测试-我的画像.png';a.className='secondary';a.textContent='下载分享图片 ↓';area.append(a);const p=document.createElement('p');p.className='small';p.textContent='也可长按图片保存。分享卡片不包含完整答题记录。';area.append(p);area.scrollIntoView({behavior:'smooth'});}
+
+window.TestCore = {calculate, rank, matchLine, Q, B, ROLES, E};
+render();
