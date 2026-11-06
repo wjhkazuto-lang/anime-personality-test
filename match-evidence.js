@@ -32,6 +32,11 @@ window.MATCH_EVIDENCE = {
     ],
     "gon_freecss": [
       5
+    ],
+    "ken_kaneki": [
+      2,
+      4,
+      5
     ]
   },
   "closeGap": 3,

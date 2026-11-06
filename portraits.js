@@ -1016,21 +1016,21 @@ window.PORTRAITS = {
     "credit": "角色插画版权归各作品权利方；身份与图片索引：AniList。配图不改变人格参考阶段。"
   },
   "ken_kaneki": {
-    "name": "金木研",
-    "src": "assets/portraits/ken_kaneki.png",
+    "name": "金木研（白发）",
+    "src": "assets/portraits/ken_kaneki_whitehair.png",
     "crop": [
-      0,
-      17,
-      230,
-      230
+      7,
+      5,
+      190,
+      190
     ],
-    "width": 230,
-    "height": 345,
-    "source": "https://anilist.co/character/87275",
-    "imageSource": "https://s4.anilist.co/file/anilistcdn/character/large/b87275-mb13EWZBdbh3.png",
+    "width": 400,
+    "height": 436,
+    "source": "https://www.marv.jp/special/tokyoghoul/first/chara.html",
+    "imageSource": "https://www.marv.jp/special/tokyoghoul/first/images/chara/kaneki2_02.png",
     "characterId": 87275,
-    "verifiedWork": "东京喰种",
-    "credit": "角色插画版权归各作品权利方；身份与图片索引：AniList。配图不改变人格参考阶段。"
+    "verifiedWork": "东京喰种√A",
+    "credit": "©石田スイ／集英社・東京喰種製作委員会；官方√A角色表情图，以CSS和分享画布取左上正面白发头像。原图不改写。"
   },
   "hachiman_hikigaya": {
     "name": "比企谷八幡",
